@@ -28,7 +28,39 @@ function lanIp() {
   }
   return 'localhost';
 }
-const BASE_URL = process.env.PUBLIC_URL || `http://${lanIp()}:${PORT}`;
+// All local IPv4 addresses, to help picking the right one (e.g. 10.x.x.x on Eduroam).
+function lanAddresses() {
+  const found = [];
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    for (const i of list || []) {
+      if (i.family === 'IPv4' && !i.internal) found.push({ name, address: i.address });
+    }
+  }
+  return found;
+}
+
+// IP address (or host name) given on the command line: `npm start -- 10.1.2.3`,
+// `npm start -- --ip 10.1.2.3` or `npm start -- --ip=10.1.2.3`.
+function ipFromArgs(args) {
+  let value = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--ip') value = args[++i];
+    else if (a.startsWith('--ip=')) value = a.slice('--ip='.length);
+    else if (!a.startsWith('-') && value === null) value = a;
+  }
+  if (value === null) return null;
+  if (!value || !/^[A-Za-z0-9.-]+$/.test(value)) {
+    console.error(`Invalid IP address: "${value || ''}"`);
+    console.error('Usage: npm start -- <ip>   (example: npm start -- 10.1.2.3)');
+    process.exit(1);
+  }
+  return value;
+}
+
+// The address written in the QR code. Priority: command line IP, then PUBLIC_URL, then auto-detection.
+const cliIp = ipFromArgs(process.argv.slice(2));
+const BASE_URL = cliIp ? `http://${cliIp}:${PORT}` : process.env.PUBLIC_URL || `http://${lanIp()}:${PORT}`;
 
 const routes = { '/': '/display.html', '/play': '/controller.html' };
 
@@ -265,4 +297,8 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('Cooperative Snake server started');
   console.log(`  Main display : http://localhost:${PORT}/`);
   console.log(`  Players (QR) : ${BASE_URL}/play`);
+  if (!cliIp && !process.env.PUBLIC_URL) {
+    console.log('  Detected addresses (if the QR code does not work, restart with: npm start -- <ip>):');
+    for (const { name, address } of lanAddresses()) console.log(`    ${name}: ${address}`);
+  }
 });

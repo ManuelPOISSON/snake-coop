@@ -30,12 +30,24 @@ npm install      # une seule fois
 npm start
 ```
 
-Le terminal affiche deux adresses :
+Le terminal affiche deux adresses (la seconde est celle encodée dans le QR code) :
 
 ```
 Main display : http://localhost:3000/
 Players (QR) : http://192.168.x.x:3000/play
 ```
+
+**Si le QR code ne fonctionne pas** (l'IP détectée n'est pas celle que les téléphones peuvent
+joindre, par exemple sur Eduroam où le PC peut avoir une adresse en `10.x.x.x`), passez l'adresse
+IP de votre PC en argument :
+
+```bash
+npm start -- 10.1.2.3
+```
+
+Le QR code pointe alors vers `http://10.1.2.3:3000/play`. (`--ip 10.1.2.3` et `--ip=10.1.2.3`
+fonctionnent aussi. Le `--` est nécessaire pour que npm transmette l'argument au jeu.) Sans IP
+donnée, le terminal liste aussi toutes les adresses détectées, pour choisir la bonne.
 
 1. **Écran principal** : ouvrez `http://localhost:3000/` sur le PC (idéalement en plein écran).
 2. **Joueurs** : scannez le QR code affiché à droite de l'écran avec le téléphone (ou tapez l'adresse `/play`).
@@ -106,7 +118,7 @@ et affiché sous la liste s'il est hors du top 10.
 | Variable | Rôle | Défaut |
 |----------|------|--------|
 | `PORT` | Port du serveur | `3000` |
-| `PUBLIC_URL` | Adresse encodée dans le QR code (utile si l'IP détectée est mauvaise) | `http://<IP locale>:PORT` |
+| `PUBLIC_URL` | Adresse complète encodée dans le QR code (l'argument IP, s'il est donné, est prioritaire) | `http://<IP locale>:PORT` |
 | `SCORES_FILE` | Chemin du fichier de scores | `scores.json` à côté de `server.js` |
 
 Exemple : `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
@@ -116,7 +128,11 @@ Exemple : `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
 - **Le téléphone n'arrive pas à se connecter** : vérifiez qu'il est sur le même Wi-Fi (pas en
   4G) et que le pare-feu du PC autorise le port 3000 (ex. Linux : `sudo ufw allow 3000/tcp`).
   Certains Wi-Fi invités isolent les appareils entre eux.
-- **Le QR code pointe vers la mauvaise IP** (VPN, plusieurs cartes réseau) : lancez avec `PUBLIC_URL`.
+- **Le QR code pointe vers la mauvaise IP** (VPN, plusieurs cartes réseau, Eduroam) : lancez avec
+  l'IP de votre PC, par ex. `npm start -- 10.1.2.3`. Sous Linux, `hostname -I` ou `ip -4 addr`
+  affiche vos adresses. Certains réseaux (Eduroam compris) isolent les appareils entre eux : si les
+  téléphones ne se connectent toujours pas avec la bonne IP, utilisez le partage de connexion
+  d'un téléphone ou un autre Wi-Fi.
 - **Pas de son** : cliquez sur la page de l'écran principal pour débloquer l'audio.
 - **Jouer seul** : possible, mais vous ne contrôlez que les directions de votre place (avec
   2 joueurs sélectionnés : 2 sur 4). Ouvrez plusieurs onglets sur `/play` pour tester toutes les directions.

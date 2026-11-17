@@ -29,7 +29,18 @@ npm start
 ```
 
 The terminal prints two addresses: the main display (`http://localhost:3000/`) and the
-players' address (`http://192.168.x.x:3000/play`).
+players' address (`http://192.168.x.x:3000/play`), which is the one encoded in the QR code.
+
+**If the QR code does not work** (the detected IP is not the one your phones can reach, e.g. on
+Eduroam where your PC may have a `10.x.x.x` address), pass your PC's IP address:
+
+```bash
+npm start -- 10.1.2.3
+```
+
+The QR code then points to `http://10.1.2.3:3000/play`. (`--ip 10.1.2.3` and `--ip=10.1.2.3` work too.
+The `--` is needed so that npm passes the argument to the game.) When no IP is given, the terminal also
+lists all the addresses it detected, so you can pick the right one.
 
 1. **Main display**: open `http://localhost:3000/` on the PC (ideally full screen).
 2. **Players**: scan the QR code shown on the right of the screen with a phone (or type the `/play` address).
@@ -97,7 +108,7 @@ below the list if it is outside the top 10.
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `PORT` | Server port | `3000` |
-| `PUBLIC_URL` | Address encoded in the QR code (useful if the detected IP is wrong) | `http://<local IP>:PORT` |
+| `PUBLIC_URL` | Full address encoded in the QR code (the IP argument, if given, takes priority) | `http://<local IP>:PORT` |
 | `SCORES_FILE` | Path of the scoreboard file | `scores.json` next to `server.js` |
 
 Example: `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
@@ -107,7 +118,10 @@ Example: `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
 - **The phone can't connect**: check that it's on the same Wi-Fi (not on mobile data) and that
   the PC firewall allows port 3000 (e.g. Linux: `sudo ufw allow 3000/tcp`).
   Some guest Wi-Fi networks isolate devices from each other.
-- **The QR code points to the wrong IP** (VPN, several network cards): start with `PUBLIC_URL`.
+- **The QR code points to the wrong IP** (VPN, several network cards, Eduroam): start with your PC's
+  IP, e.g. `npm start -- 10.1.2.3`. On Linux, `hostname -I` or `ip -4 addr` shows your addresses.
+  Some networks (Eduroam included) isolate devices from each other: if phones still can't connect
+  with the right IP, use a phone hotspot or another Wi-Fi network.
 - **No sound**: click the main display page to unlock audio.
 - **Playing alone**: possible, but you only control the directions of your own seat (with 2
   players selected: 2 of the 4). Open several tabs on `/play` to try all directions.
