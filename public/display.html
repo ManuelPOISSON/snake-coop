@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snake – Display</title>
+<style>
+  :root { --up:#1e66f5; --down:#e5322d; --left:#f5c518; --right:#2fb344; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:#111; color:#eee; font-family:system-ui,sans-serif;
+         display:flex; gap:24px; align-items:center; justify-content:center; padding:16px; flex-wrap:wrap; }
+  #board { position:relative; }
+  canvas { background:#1b1b1b; border:4px solid #333; border-radius:8px; display:block;
+           width:min(90vh, 90vw, 720px); height:min(90vh, 90vw, 720px); }
+  #overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+             justify-content:center; background:rgba(0,0,0,.65); border-radius:8px; text-align:center; gap:12px; }
+  #overlay.hidden { display:none; }
+  #overlay h1 { margin:0; font-size:2.4rem; }
+  button { font:inherit; font-size:1.2rem; padding:12px 28px; border:0; border-radius:8px;
+           background:#eee; color:#111; cursor:pointer; }
+  #modes { display:flex; gap:8px; }
+  .mode { font-size:1rem; padding:8px 18px; background:#444; color:#eee; }
+  .mode.sel { background:#eee; color:#111; font-weight:700; }
+  #modehint { font-size:.9rem; color:#bbb; max-width:300px; }
+  #modebadge { font-size:1rem; color:#ccc; }
+  aside { width:260px; display:flex; flex-direction:column; gap:16px; align-items:center; }
+  #score { font-size:2rem; font-weight:700; }
+  #qr { width:220px; background:#fff; border-radius:8px; padding:4px; }
+  #qr svg { width:100%; height:auto; display:block; }
+  #url { font-size:.85rem; color:#aaa; word-break:break-all; text-align:center; }
+  #slots { display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; }
+  .slot { padding:10px; border-radius:8px; text-align:center; font-weight:600; opacity:.3; color:#fff; }
+  .slot.on { opacity:1; }
+  .slot[data-d=up]    { background:var(--up); }
+  .slot[data-d=down]  { background:var(--down); }
+  .slot[data-d=left]  { background:var(--left); color:#222; }
+  .slot[data-d=right] { background:var(--right); }
+</style>
+</head>
+<body>
+  <div id="board">
+    <canvas id="c" width="720" height="720"></canvas>
+    <div id="overlay">
+      <h1 id="title">Snake</h1>
+      <div id="sub">Scan the QR code to join</div>
+      <div id="modes">
+        <button class="mode" data-m="easy">Easy</button>
+        <button class="mode" data-m="hard">Hard 🔀</button>
+      </div>
+      <div id="modehint"></div>
+      <button id="start">Play (space)</button>
+    </div>
+  </div>
+  <aside>
+    <div>Score: <span id="score">0</span></div>
+    <div>Speed: <span id="speed">0</span> cells/s</div>
+    <div id="modebadge"></div>
+    <div id="qr"></div>
+    <div id="url"></div>
+    <div id="slots">
+      <div class="slot" data-d="up">⬆ Up</div>
+      <div class="slot" data-d="down">⬇ Down</div>
+      <div class="slot" data-d="left">⬅ Left</div>
+      <div class="slot" data-d="right">➡ Right</div>
+    </div>
+  </aside>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const $ = (id) => document.getElementById(id);
+let state = null;
+let ws;
+
+// ---- Sons (WebAudio, aucun fichier) ----
+let audio;
+function beep(freq, dur, type = 'square', vol = 0.08, when = 0) {
+  if (!audio) return;
+  const t = audio.currentTime + when;
+  const o = audio.createOscillator(), g = audio.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(vol, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g).connect(audio.destination);
+  o.start(t); o.stop(t + dur);
+}
+const sounds = {
+  eat:   () => { beep(660, .08); beep(990, .1, 'square', .08, .07); },
+  dead:  () => { beep(300, .2, 'sawtooth', .1); beep(200, .25, 'sawtooth', .1, .18); beep(110, .5, 'sawtooth', .1, .38); },
+  start: () => { beep(440, .1); beep(660, .15, 'square', .08, .1); },
+};
+function unlockAudio() {
+  if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === 'suspended') audio.resume();
+}
+
+// ---- Rendu ----
+function draw() {
+  if (!state) return;
+  const n = state.size, cell = canvas.width / n;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 1;
+  for (let i = 1; i < n; i++) {
+    ctx.beginPath(); ctx.moveTo(i * cell, 0); ctx.lineTo(i * cell, canvas.height); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, i * cell); ctx.lineTo(canvas.width, i * cell); ctx.stroke();
+  }
+  if (state.apple) {
+    ctx.fillStyle = '#ff4d6d';
+    ctx.beginPath();
+    ctx.arc((state.apple.x + .5) * cell, (state.apple.y + .5) * cell, cell * .38, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  state.snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#9be564' : '#4cc35a';
+    if (state.status === 'gameover') ctx.fillStyle = i === 0 ? '#999' : '#666';
+    ctx.fillRect(s.x * cell + 1, s.y * cell + 1, cell - 2, cell - 2);
+  });
+}
+
+function render() {
+  $('score').textContent = state.score;
+  $('speed').textContent = (1000 / state.interval).toFixed(1);
+  for (const el of document.querySelectorAll('.slot'))
+    el.classList.toggle('on', !!state.players[el.dataset.d]);
+  for (const b of document.querySelectorAll('.mode')) b.classList.toggle('sel', b.dataset.m === state.mode);
+  $('modehint').textContent = state.mode === 'hard'
+    ? 'On every tap, directions are randomly reshuffled between players!'
+    : 'Each player keeps their direction.';
+  $('modebadge').textContent = state.mode === 'hard' ? '🔀 Hard mode' : 'Easy mode';
+  const ov = $('overlay');
+  ov.classList.toggle('hidden', state.status === 'playing');
+  if (state.status === 'waiting') {
+    $('title').textContent = 'Snake';
+    $('sub').textContent = 'Scan the QR code to join';
+    $('start').textContent = 'Play (space)';
+  } else if (state.status === 'gameover') {
+    $('title').textContent = 'Game over';
+    $('sub').textContent = 'Score: ' + state.score;
+    $('start').textContent = 'Play again (space)';
+  }
+  draw();
+}
+
+// ---- Network ----
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', role: 'display' }));
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'state') { state = m; render(); }
+    else if (m.type === 'event' && sounds[m.name]) sounds[m.name]();
+  };
+  ws.onclose = () => setTimeout(connect, 1000);
+}
+function start() {
+  unlockAudio();
+  if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'start' }));
+}
+$('start').onclick = start;
+for (const b of document.querySelectorAll('.mode'))
+  b.onclick = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'mode', mode: b.dataset.m }));
+addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); start(); }
+  else unlockAudio();
+});
+addEventListener('pointerdown', unlockAudio);
+
+fetch('/info').then((r) => r.json()).then(({ playUrl, qr }) => {
+  $('qr').innerHTML = qr;
+  $('url').textContent = playUrl;
+});
+connect();
+</script>
+</body>
+</html>
