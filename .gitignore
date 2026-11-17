@@ -1,3 +1,6 @@
+
+.idea
+
 # Logs
 logs
 *.log
@@ -155,3 +158,8 @@ vite.config.ts.timestamp-*
 .nx/cache
 .nx/workspace-data
 .nx/migrate-runs
+
+# Local scoreboard (per machine)
+scores.json
+scores.json.tmp
+scores.json.corrupt-*
