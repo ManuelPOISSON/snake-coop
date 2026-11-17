@@ -2,8 +2,9 @@
 
 🇬🇧 [English version](README.md)
 
-Un seul serpent sur un écran commun (PC / TV). Jusqu'à **4 joueurs** sur leur téléphone :
-chacun contrôle **une seule direction**.
+Un seul serpent sur un écran commun (PC / TV). **2, 3 ou 4 joueurs** sur leur téléphone se
+partagent les 4 directions (voir [Nombre de joueurs](#nombre-de-joueurs)). À 4 joueurs, chacun
+contrôle **une seule direction**.
 
 | Couleur | Direction |
 |---------|-----------|
@@ -32,8 +33,8 @@ npm start
 Le terminal affiche deux adresses :
 
 ```
-Écran principal : http://localhost:3000/
-Joueurs (QR)    : http://192.168.x.x:3000/play
+Main display : http://localhost:3000/
+Players (QR) : http://192.168.x.x:3000/play
 ```
 
 1. **Écran principal** : ouvrez `http://localhost:3000/` sur le PC (idéalement en plein écran).
@@ -45,15 +46,33 @@ Joueurs (QR)    : http://192.168.x.x:3000/play
    Il grandit en mangeant les pommes et accélère à chaque pomme.
 5. Game over si le serpent touche un mur ou sa queue : **Play again** (espace).
 
+## Nombre de joueurs
+
+Choisissez **2 / 3 / 4 joueurs** (boutons « players ») sur l'écran principal avant de lancer
+la partie (4 par défaut). Le choix ne change pas pendant une partie.
+
+| Joueurs | Qui contrôle quoi |
+|---------|-------------------|
+| 4 | Une direction par joueur. |
+| 3 | Un joueur tiré au sort contrôle **2 directions**, les deux autres 1 chacun. |
+| 2 | Chaque joueur contrôle **2 directions**. |
+
+- Un téléphone qui a 2 directions voit son écran coupé en **deux moitiés colorées** : touchez la
+  moitié de la direction voulue.
+- En mode Easy, les directions sont **tirées au sort au début de chaque partie** à 2 ou 3 joueurs
+  (à 4 joueurs, l'ordre est fixe : bleu = haut, rouge = bas, jaune = gauche, vert = droite).
+- Les téléphones au-delà du nombre choisi sont spectateurs et prennent une place automatiquement
+  dès qu'elle se libère (un téléphone part, ou un nombre de joueurs plus grand est choisi).
+
 ## Modes de difficulté
 
 Choisissez le mode sur l'écran principal avant de lancer la partie (boutons **Easy** / **Hard**).
 Le mode ne change pas pendant une partie.
 
 - **Easy** (facile, par défaut) : chaque joueur garde sa direction pendant toute la partie.
-- **Hard** (difficile) 🔀 : à chaque clic, le serpent part dans la direction de la couleur affichée,
-  puis les 4 directions sont **redistribuées au hasard** entre les joueurs. Chaque joueur voit
-  alors sa couleur changer : 1 chance sur 4 de garder la même direction, 3 sur 4 d'en recevoir une autre.
+- **Hard** (difficile) 🔀 : à chaque clic, le serpent part dans la direction de la couleur touchée,
+  puis les 4 directions sont **entièrement redistribuées au hasard** entre les joueurs. Chaque
+  téléphone voit ses couleurs changer. À 3 joueurs, celui qui contrôle 2 directions change aussi.
 
 ## Scoreboard (classement)
 
@@ -77,8 +96,8 @@ et affiché sous la liste s'il est hors du top 10.
 - Le demi-tour direct est ignoré (haut puis bas immédiat ne fait rien).
 - Score = nombre de pommes mangées ; la vitesse augmente jusqu'à un plafond. Elle est affichée
   en cases par seconde (de 4,5 au départ à 14,3 au maximum, atteint à 19 pommes).
-- Une 5ᵉ personne qui se connecte est spectatrice. Une place libérée (téléphone déconnecté)
-  est réattribuée au prochain arrivant.
+- Les téléphones en trop sont spectateurs ; une place libérée va au spectateur qui attend depuis
+  le plus longtemps.
 - Sons : générés par le navigateur de l'écran principal. Cliquez une fois sur la page ou
   appuyez sur une touche pour activer le son. Les téléphones vibrent aux clics et au game over.
 
@@ -99,15 +118,15 @@ Exemple : `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
   Certains Wi-Fi invités isolent les appareils entre eux.
 - **Le QR code pointe vers la mauvaise IP** (VPN, plusieurs cartes réseau) : lancez avec `PUBLIC_URL`.
 - **Pas de son** : cliquez sur la page de l'écran principal pour débloquer l'audio.
-- **Jouer seul** : possible, mais vous ne contrôlez qu'une direction. Ouvrez plusieurs onglets
-  sur `/play` pour tester les 4 directions.
+- **Jouer seul** : possible, mais vous ne contrôlez que les directions de votre place (avec
+  2 joueurs sélectionnés : 2 sur 4). Ouvrez plusieurs onglets sur `/play` pour tester toutes les directions.
 
 ## Structure
 
 ```
 snake-coop/
 ├── server.js            serveur HTTP + WebSocket + boucle de jeu
-├── game.js              logique pure du jeu (mouvement, collisions, pomme)
+├── game.js              logique pure du jeu (mouvement, collisions, pomme, distribution des directions)
 ├── scores.js            classement persistant (fichier JSON, noms d'animaux aléatoires)
 ├── test.js              tests de la logique et du classement (npm test)
 ├── scores.json          créé au premier score enregistré (ignoré par git)

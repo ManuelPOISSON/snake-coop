@@ -7,17 +7,29 @@
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin:0; height:100%; overflow:hidden; touch-action:manipulation; user-select:none; }
-  body { background:#222; color:#fff; font-family:system-ui,sans-serif; transition:background .15s; }
-  body.up    { background:#1e66f5; }
-  body.down  { background:#e5322d; }
-  body.left  { background:#f5c518; color:#222; }
-  body.right { background:#2fb344; }
-  #pad { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+  body { background:#222; color:#fff; font-family:system-ui,sans-serif; }
+  #pad { position:relative; height:100%; display:flex; flex-direction:column; align-items:center;
+         justify-content:center; gap:16px; text-align:center; }
   #arrow { font-size:34vmin; line-height:1; }
   #label { font-size:7vmin; font-weight:700; }
   #hint { font-size:4vmin; opacity:.8; padding:0 16px; }
-  #pad.flash { filter:brightness(1.35); }
-  #pad.over #arrow, #pad.over #label, #pad.over #hint { display:none; }
+
+  /* One colored zone per direction: the whole screen for 1 direction, two halves for 2. */
+  #zones { position:absolute; inset:0; display:flex; }
+  #zones[hidden] { display:none; }
+  #zones.col { flex-direction:column; }
+  .zone { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+          transition:filter .1s; }
+  .zone .arrow { font-size:24vmin; line-height:1; }
+  #zones.single .zone .arrow { font-size:34vmin; }
+  .zone .name { font-size:7vmin; font-weight:700; }
+  .zone.up    { background:#1e66f5; }
+  .zone.down  { background:#e5322d; }
+  .zone.left  { background:#f5c518; color:#222; }
+  .zone.right { background:#2fb344; }
+  .zone.flash { filter:brightness(1.35); }
+
+  #pad.over #zones, #pad.over #arrow, #pad.over #label, #pad.over #hint { display:none; }
   #gameover { width:min(360px, 90vw); display:flex; flex-direction:column; gap:12px; align-items:center; }
   #gameover[hidden] { display:none; }
   #gameover h1 { margin:0; font-size:9vmin; }
@@ -35,6 +47,7 @@
 </head>
 <body>
 <div id="pad">
+  <div id="zones" hidden></div>
   <div id="arrow">…</div>
   <div id="label">Connecting…</div>
   <div id="hint"></div>
@@ -51,6 +64,7 @@
 </div>
 <script>
 const pad = document.getElementById('pad');
+const zones = document.getElementById('zones');
 const $ = (id) => document.getElementById(id);
 const INFO = {
   up:    ['⬆', 'UP'],
@@ -58,9 +72,51 @@ const INFO = {
   left:  ['⬅', 'LEFT'],
   right: ['➡', 'RIGHT'],
 };
-let ws, dir = null;
+let ws;
+let myDirs = [];
 let status = 'waiting';
 let editedId = null; // id of the score whose name is shown in the input
+
+// Order and orientation of the zones for the directions this phone controls.
+function zoneLayout(dirs) {
+  if (dirs.length === 1) return { order: dirs, column: false };
+  if (dirs.includes('up') && dirs.includes('down')) return { order: ['up', 'down'], column: true };
+  if (dirs.includes('left') && dirs.includes('right')) return { order: ['left', 'right'], column: false };
+  // Mixed pair (e.g. up + left): the horizontal direction goes on its own side.
+  const horizontal = dirs.find((d) => d === 'left' || d === 'right');
+  const vertical = dirs.find((d) => d === 'up' || d === 'down');
+  return { order: horizontal === 'left' ? [horizontal, vertical] : [vertical, horizontal], column: false };
+}
+
+function showDirections(dirs) {
+  myDirs = dirs;
+  const { order, column } = zoneLayout(dirs);
+  zones.replaceChildren();
+  zones.className = (column ? 'col ' : '') + (dirs.length === 1 ? 'single' : '');
+  for (const d of order) {
+    const z = document.createElement('div');
+    z.className = 'zone ' + d;
+    z.dataset.dir = d;
+    z.innerHTML = '<div class="arrow"></div><div class="name"></div>';
+    z.querySelector('.arrow').textContent = INFO[d][0];
+    z.querySelector('.name').textContent = INFO[d][1];
+    // small pop to signal a (re)assignment, even if the directions are unchanged
+    z.querySelector('.arrow').animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], 200);
+    zones.appendChild(z);
+  }
+  zones.hidden = false;
+  for (const id of ['arrow', 'label', 'hint']) $(id).style.display = 'none';
+}
+
+function showMessage(arrow, label, hint) {
+  myDirs = [];
+  zones.hidden = true;
+  zones.replaceChildren();
+  for (const id of ['arrow', 'label', 'hint']) $(id).style.display = '';
+  $('arrow').textContent = arrow;
+  $('label').textContent = label;
+  $('hint').textContent = hint;
+}
 
 function renderGameOver(m) {
   status = m.status;
@@ -84,7 +140,7 @@ function saveName() {
 $('saveBtn').onclick = () => { saveName(); $('nameInput').blur(); };
 $('nameInput').onchange = saveName;
 $('nameInput').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
-$('again').onclick = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'press' }));
+$('again').onclick = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'press', dir: myDirs[0] }));
 // Taps inside the game-over panel must not steer or restart the game.
 $('gameover').addEventListener('pointerdown', (e) => e.stopPropagation());
 
@@ -96,36 +152,27 @@ function connect() {
     if (m.type === 'state') {
       renderGameOver(m);
     } else if (m.type === 'assigned') {
-      dir = m.dir;
-      document.body.className = dir;
-      $('arrow').textContent = INFO[dir][0];
-      $('label').textContent = INFO[dir][1];
-      $('hint').textContent = 'Tap the screen to steer the snake';
-      // small pop to signal a (re)assignment, even if the direction is unchanged
-      $('arrow').animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], 200);
+      showDirections(m.dirs);
     } else if (m.type === 'spectator') {
-      dir = null;
-      document.body.className = '';
-      $('arrow').textContent = '👀';
-      $('label').textContent = 'Game full';
-      $('hint').textContent = 'All 4 directions are taken. Reload if a spot frees up.';
+      showMessage('👀', 'Game full', 'All seats are taken. You will join automatically when one frees up.');
     } else if (m.type === 'event' && m.name === 'dead' && navigator.vibrate) {
       navigator.vibrate([200, 80, 200]);
     }
   };
   ws.onclose = () => {
-    $('label').textContent = 'Reconnecting…';
+    showMessage('…', 'Reconnecting…', '');
     setTimeout(connect, 1000);
   };
 }
 
-pad.addEventListener('pointerdown', (e) => {
+zones.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  if (!dir || ws.readyState !== 1 || status === 'gameover') return; // restart via the button
-  ws.send(JSON.stringify({ type: 'press' }));
+  const zone = e.target.closest('.zone');
+  if (!zone || ws.readyState !== 1 || status === 'gameover') return; // restart via the button
+  ws.send(JSON.stringify({ type: 'press', dir: zone.dataset.dir }));
   if (navigator.vibrate) navigator.vibrate(30);
-  pad.classList.add('flash');
-  setTimeout(() => pad.classList.remove('flash'), 100);
+  zone.classList.add('flash');
+  setTimeout(() => zone.classList.remove('flash'), 100);
 });
 connect();
 </script>

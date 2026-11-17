@@ -108,16 +108,32 @@ class Game {
   }
 }
 
-// Permutation aléatoire des directions : { up: 'left', down: 'up', ... }.
-// Chaque direction a 1 chance sur 4 de rester la même.
-function shuffleDirs(rng = Math.random) {
-  const keys = Object.keys(DIRS);
-  const vals = keys.slice();
-  for (let i = vals.length - 1; i > 0; i--) {
-    const j = Math.floor(rng() * (i + 1));
-    [vals[i], vals[j]] = [vals[j], vals[i]];
+const PLAYER_COUNTS = [2, 3, 4];
+
+// Deals the 4 directions between `players` seats. Returns one array of directions per seat:
+//   4 players -> 1 direction each
+//   3 players -> one random seat gets 2 directions, the other two get 1
+//   2 players -> 2 directions each
+// With shuffle=false the order is fixed (up, down, left, right), which only makes sense for 4 players.
+function dealDirections(players, { shuffle = true, rng = Math.random } = {}) {
+  if (!PLAYER_COUNTS.includes(players)) throw new Error(`Unsupported number of players: ${players}`);
+  const dirs = Object.keys(DIRS);
+  if (shuffle) {
+    for (let i = dirs.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+    }
   }
-  return Object.fromEntries(keys.map((k, i) => [k, vals[i]]));
+  if (players === 4) return dirs.map((d) => [d]);
+  if (players === 2) return [dirs.slice(0, 2), dirs.slice(2)];
+  const double = Math.floor(rng() * 3);
+  let next = 0;
+  return [0, 1, 2].map((seat) => {
+    const count = seat === double ? 2 : 1;
+    const mine = dirs.slice(next, next + count);
+    next += count;
+    return mine;
+  });
 }
 
-module.exports = { Game, DIRS, OPPOSITE, shuffleDirs };
+module.exports = { Game, DIRS, OPPOSITE, PLAYER_COUNTS, dealDirections };

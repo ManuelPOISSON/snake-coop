@@ -51,15 +51,36 @@ for (let i = 0; i < 50; i++) {
   assert.ok(!g.snake.some((s) => s.x === a.x && s.y === a.y));
 }
 
-// mélange des directions : toujours une permutation, et parfois identique
-const { shuffleDirs } = require('./game');
-let same = 0;
-for (let i = 0; i < 2000; i++) {
-  const m = shuffleDirs();
-  assert.deepStrictEqual(Object.values(m).sort(), ['down', 'left', 'right', 'up']);
-  if (m.up === 'up') same++;
+// dealing directions between 2, 3 or 4 players
+{
+  const { dealDirections } = require('./game');
+  const ALL = ['down', 'left', 'right', 'up'];
+  const sizes = (deal) => deal.map((d) => d.length).sort();
+
+  assert.deepStrictEqual(dealDirections(4, { shuffle: false }), [['up'], ['down'], ['left'], ['right']]);
+  assert.throws(() => dealDirections(1));
+  assert.throws(() => dealDirections(5));
+
+  const doubleSeats = new Set();
+  const firstDirOfSeat0 = new Set();
+  for (let i = 0; i < 2000; i++) {
+    for (const n of [2, 3, 4]) {
+      const deal = dealDirections(n);
+      assert.strictEqual(deal.length, n);
+      // every direction is given to exactly one seat
+      assert.deepStrictEqual(deal.flat().sort(), ALL);
+      if (n === 2) assert.deepStrictEqual(sizes(deal), [2, 2]);
+      if (n === 3) {
+        assert.deepStrictEqual(sizes(deal), [1, 1, 2]);
+        doubleSeats.add(deal.findIndex((d) => d.length === 2));
+      }
+      if (n === 4) assert.deepStrictEqual(sizes(deal), [1, 1, 1, 1]);
+      if (n === 4) firstDirOfSeat0.add(deal[0][0]);
+    }
+  }
+  assert.strictEqual(doubleSeats.size, 3, 'any of the 3 players can be the one with 2 directions');
+  assert.strictEqual(firstDirOfSeat0.size, 4, 'shuffling changes who gets which direction');
 }
-assert.ok(same > 350 && same < 650, 'environ 1 chance sur 4 de garder sa direction : ' + same);
 
 // scoreboard: persistence, ranking, renaming
 {
