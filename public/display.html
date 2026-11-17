@@ -14,7 +14,23 @@
            width:min(90vh, 90vw, 720px); height:min(90vh, 90vw, 720px); }
   #overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
              justify-content:center; background:rgba(0,0,0,.65); border-radius:8px; text-align:center; gap:12px; }
+  #overlay { overflow:auto; justify-content:safe center; padding:12px; }
   #overlay.hidden { display:none; }
+  #scoreboard { width:min(440px, 100%); }
+  #scoreboard[hidden] { display:none; }
+  #nameRow { display:flex; gap:8px; align-items:center; justify-content:center; margin-bottom:8px; }
+  #nameRow[hidden] { display:none; }
+  #nameInput { font:inherit; font-size:1.1rem; padding:6px 10px; width:220px; border-radius:6px;
+               border:2px solid #666; background:#222; color:#fff; text-align:center; }
+  #nameInput:focus { outline:none; border-color:#9be564; }
+  #boardTitle { font-size:1rem; color:#bbb; margin-bottom:4px; }
+  #scoreTable { width:100%; border-collapse:collapse; font-size:1rem; }
+  #scoreTable td { padding:3px 8px; text-align:left; }
+  #scoreTable td:first-child { width:2.5em; color:#999; text-align:right; }
+  #scoreTable td:last-child { text-align:right; font-weight:700; }
+  #scoreTable tr.me { background:rgba(155,229,100,.25); }
+  #scoreTable tr.gap td { text-align:center; color:#777; padding:0; }
+  #scoreTable tr.empty td { text-align:center; color:#999; }
   #overlay h1 { margin:0; font-size:2.4rem; }
   button { font:inherit; font-size:1.2rem; padding:12px 28px; border:0; border-radius:8px;
            background:#eee; color:#111; cursor:pointer; }
@@ -43,6 +59,14 @@
     <div id="overlay">
       <h1 id="title">Snake</h1>
       <div id="sub">Scan the QR code to join</div>
+      <div id="scoreboard" hidden>
+        <div id="nameRow">
+          <label for="nameInput">Team name</label>
+          <input id="nameInput" maxlength="20" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="boardTitle"></div>
+        <table id="scoreTable"><tbody></tbody></table>
+      </div>
       <div id="modes">
         <button class="mode" data-m="easy">Easy</button>
         <button class="mode" data-m="hard">Hard 🔀</button>
@@ -117,8 +141,52 @@ function draw() {
   });
 }
 
+// ---- Scoreboard (shown after game over) ----
+let editedId = null; // id of the score whose name is shown in the input
+function renderBoard(b) {
+  const input = $('nameInput');
+  const cur = b.current;
+  $('nameRow').hidden = !cur;
+  if (cur && (editedId !== cur.id || document.activeElement !== input)) {
+    input.value = cur.name; // do not overwrite while the user is typing
+    editedId = cur.id;
+  }
+  $('boardTitle').textContent = 'Top 10 – ' + (b.mode === 'hard' ? 'Hard' : 'Easy');
+  const tbody = $('scoreTable').tBodies[0];
+  tbody.replaceChildren();
+  const addRow = (e, cls) => {
+    const tr = tbody.insertRow();
+    if (cls) tr.className = cls;
+    tr.insertCell().textContent = e.rank + '.';
+    tr.insertCell().textContent = e.name;
+    tr.insertCell().textContent = e.score;
+  };
+  if (!b.top.length) {
+    const tr = tbody.insertRow();
+    tr.className = 'empty';
+    const td = tr.insertCell();
+    td.colSpan = 3;
+    td.textContent = 'No scores yet';
+  }
+  for (const e of b.top) addRow(e, cur && e.id === cur.id ? 'me' : '');
+  if (cur && cur.rank > b.top.length) { // outside the top 10: show it below
+    const gap = tbody.insertRow();
+    gap.className = 'gap';
+    gap.insertCell().colSpan = 3;
+    gap.cells[0].textContent = '⋯';
+    addRow(cur, 'me');
+  }
+}
+function saveName() {
+  if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'rename', name: $('nameInput').value }));
+}
+$('nameInput').onchange = saveName;
+$('nameInput').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
+
 function render() {
   $('score').textContent = state.score;
+  $('scoreboard').hidden = !state.board;
+  if (state.board) renderBoard(state.board);
   $('speed').textContent = (1000 / state.interval).toFixed(1);
   for (const el of document.querySelectorAll('.slot'))
     el.classList.toggle('on', !!state.players[el.dataset.d]);
@@ -160,6 +228,7 @@ $('start').onclick = start;
 for (const b of document.querySelectorAll('.mode'))
   b.onclick = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'mode', mode: b.dataset.m }));
 addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return; // typing a name: Space must not start the game
   if (e.code === 'Space') { e.preventDefault(); start(); }
   else unlockAudio();
 });

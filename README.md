@@ -49,6 +49,21 @@ The mode can't be changed during a game.
   then the 4 directions are **randomly reshuffled** between the players. Each player sees
   their color change: 1 in 4 chance of keeping the same direction, 3 in 4 of getting a different one.
 
+## Scoreboard
+
+After a game over, the main display shows the **top 10** of the mode that was just played
+(Easy and Hard have separate boards). The score of the finished game is highlighted, and shown
+below the list if it is outside the top 10.
+
+- Each game gets a **random animal name** (mythological or not, e.g. "Griffin", "Otter").
+- The team name can be **changed** from the main display (type in the "Team name" field,
+  Enter to save) or from any phone (name field + **Save**), until the next game starts.
+  Names are limited to 20 characters.
+- Scores of 0 are not recorded.
+- Scores are saved in `scores.json` (best 100 per mode) and reloaded when the server starts,
+  so they survive a restart. The file is ignored by git: each machine keeps its own scores.
+  To reset the scoreboard, stop the server and delete the file.
+
 ## Rules
 
 - An immediate U-turn is ignored (up then instantly down does nothing).
@@ -65,6 +80,7 @@ The mode can't be changed during a game.
 |----------|---------|---------|
 | `PORT` | Server port | `3000` |
 | `PUBLIC_URL` | Address encoded in the QR code (useful if the detected IP is wrong) | `http://<local IP>:PORT` |
+| `SCORES_FILE` | Path of the scoreboard file | `scores.json` next to `server.js` |
 
 Example: `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
 
@@ -84,7 +100,9 @@ Example: `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
 snake-coop/
 ├── server.js            HTTP + WebSocket server + game loop
 ├── game.js              pure game logic (movement, collisions, apple)
-├── test.js              logic tests (npm test)
+├── scores.js            persistent scoreboard (JSON file, random animal names)
+├── test.js              logic and scoreboard tests (npm test)
+├── scores.json          created on the first recorded score (git-ignored)
 └── public/
     ├── display.html     main display (canvas, QR code, sounds)
     └── controller.html  player page (full-screen color)

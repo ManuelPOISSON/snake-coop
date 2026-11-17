@@ -55,6 +55,23 @@ Le mode ne change pas pendant une partie.
   puis les 4 directions sont **redistribuées au hasard** entre les joueurs. Chaque joueur voit
   alors sa couleur changer : 1 chance sur 4 de garder la même direction, 3 sur 4 d'en recevoir une autre.
 
+## Scoreboard (classement)
+
+Après un game over, l'écran principal affiche le **top 10** du mode qui vient d'être joué
+(Easy et Hard ont chacun leur classement). Le score de la partie terminée est mis en évidence,
+et affiché sous la liste s'il est hors du top 10.
+
+- Chaque partie reçoit un **nom d'animal aléatoire**, mythologique ou non, en anglais
+  (ex. « Griffin », « Otter »).
+- Le nom d'équipe peut être **modifié** depuis l'écran principal (champ « Team name »,
+  Entrée pour valider) ou depuis n'importe quel téléphone (champ + **Save**), jusqu'au début
+  de la partie suivante. Les noms sont limités à 20 caractères.
+- Les scores de 0 ne sont pas enregistrés.
+- Les scores sont sauvegardés dans `scores.json` (100 meilleurs par mode) et rechargés au
+  démarrage du serveur : ils survivent donc à un redémarrage. Le fichier est ignoré par git :
+  chaque machine garde ses propres scores. Pour remettre le classement à zéro, arrêtez le
+  serveur et supprimez le fichier.
+
 ## Règles
 
 - Le demi-tour direct est ignoré (haut puis bas immédiat ne fait rien).
@@ -71,6 +88,7 @@ Le mode ne change pas pendant une partie.
 |----------|------|--------|
 | `PORT` | Port du serveur | `3000` |
 | `PUBLIC_URL` | Adresse encodée dans le QR code (utile si l'IP détectée est mauvaise) | `http://<IP locale>:PORT` |
+| `SCORES_FILE` | Chemin du fichier de scores | `scores.json` à côté de `server.js` |
 
 Exemple : `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
 
@@ -90,7 +108,9 @@ Exemple : `PORT=8080 PUBLIC_URL=http://192.168.1.20:8080 npm start`
 snake-coop/
 ├── server.js            serveur HTTP + WebSocket + boucle de jeu
 ├── game.js              logique pure du jeu (mouvement, collisions, pomme)
-├── test.js              tests de la logique (npm test)
+├── scores.js            classement persistant (fichier JSON, noms d'animaux aléatoires)
+├── test.js              tests de la logique et du classement (npm test)
+├── scores.json          créé au premier score enregistré (ignoré par git)
 └── public/
     ├── display.html     écran principal (canvas, QR code, sons)
     └── controller.html  page joueur (couleur plein écran)

@@ -61,4 +61,57 @@ for (let i = 0; i < 2000; i++) {
 }
 assert.ok(same > 350 && same < 650, 'environ 1 chance sur 4 de garder sa direction : ' + same);
 
+// scoreboard: persistence, ranking, renaming
+{
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { ScoreBoard, sanitizeName, ANIMALS, MAX_NAME } = require('./scores');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snake-scores-'));
+  const file = path.join(dir, 'scores.json');
+  let t = 1000;
+  const opts = { now: () => t++ };
+
+  let b = new ScoreBoard(file, opts); // missing file -> empty board
+  assert.deepStrictEqual(b.top('easy'), []);
+
+  const a = b.add('easy', 5);
+  const c = b.add('easy', 9);
+  const d = b.add('easy', 5); // tie with `a`, later -> ranks below
+  b.add('hard', 3);
+  assert.ok(ANIMALS.includes(a.name));
+  assert.deepStrictEqual(b.top('easy').map((e) => e.score), [9, 5, 5]);
+  assert.strictEqual(b.rank('easy', c.id), 1);
+  assert.strictEqual(b.rank('easy', a.id), 2);
+  assert.strictEqual(b.rank('easy', d.id), 3);
+  assert.strictEqual(b.top('hard').length, 1); // separate boards
+
+  // renaming: sanitized, persisted, rejects bad input
+  assert.ok(b.rename('easy', a.id, '  Bob   the\tgreat  '));
+  assert.strictEqual(b.get('easy', a.id).name, 'Bob the great');
+  assert.strictEqual(b.rename('easy', a.id, '   '), null);
+  assert.strictEqual(b.rename('easy', a.id, 42), null);
+  assert.strictEqual(b.rename('easy', 'nope', 'X'), null);
+  assert.strictEqual(sanitizeName('x'.repeat(100)).length, MAX_NAME);
+  assert.strictEqual(sanitizeName('a\u0000b\nc'), 'ab c');
+  assert.strictEqual(sanitizeName('<b>hi</b>'), '<b>hi</b>'); // stored as-is, UI uses textContent
+
+  // restart: a new instance reads the same file
+  b = new ScoreBoard(file, opts);
+  assert.deepStrictEqual(b.top('easy').map((e) => e.score), [9, 5, 5]);
+  assert.strictEqual(b.get('easy', a.id).name, 'Bob the great');
+  assert.strictEqual(b.top('hard').length, 1);
+
+  // only the best 100 are kept per mode
+  for (let i = 0; i < 120; i++) b.add('hard', i);
+  assert.strictEqual(b.scores.hard.length, 100);
+
+  // corrupt file: not overwritten, moved aside
+  fs.writeFileSync(file, '{not json');
+  b = new ScoreBoard(file, opts);
+  assert.deepStrictEqual(b.top('easy'), []);
+  assert.ok(fs.readdirSync(dir).some((f) => f.includes('.corrupt-')));
+  fs.rmSync(dir, { recursive: true });
+}
+
 console.log('OK : tous les tests passent');

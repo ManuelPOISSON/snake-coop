@@ -5,6 +5,7 @@ const os = require('os');
 const { WebSocketServer } = require('ws');
 const QRCode = require('qrcode');
 const { Game, shuffleDirs } = require('./game');
+const { ScoreBoard } = require('./scores');
 
 const PORT = parseInt(process.env.PORT, 10) || 3000;
 const PUBLIC = path.join(__dirname, 'public');
@@ -62,6 +63,8 @@ let players = {}; // direction -> ws
 let mode = 'easy'; // 'easy' | 'hard' (hard : directions remélangées à chaque clic)
 let loop = null;
 let gameoverAt = 0;
+const board = new ScoreBoard(process.env.SCORES_FILE || path.join(__dirname, 'scores.json'));
+let current = null; // { id, mode } of the score just recorded, renamable until the next game
 
 function send(ws, msg) {
   if (ws.readyState === 1) ws.send(JSON.stringify(msg));
@@ -73,7 +76,30 @@ function broadcast(msg) {
 function snapshot() {
   const taken = {};
   for (const s of SLOTS) taken[s] = !!players[s];
-  return { type: 'state', ...game.state(), players: taken, mode };
+  return { type: 'state', ...game.state(), players: taken, mode, board: boardView() };
+}
+
+// Scoreboard shown after a game over (null the rest of the time).
+function boardView() {
+  if (game.status !== 'gameover') return null;
+  const boardMode = current ? current.mode : mode;
+  return {
+    mode: boardMode,
+    top: board.top(boardMode, 10),
+    current: current ? board.get(current.mode, current.id) : null,
+  };
+}
+
+// Records the finished game; scores of 0 are not recorded.
+function recordScore() {
+  current = null;
+  if (game.score <= 0) return;
+  try {
+    const entry = board.add(mode, game.score);
+    current = { id: entry.id, mode };
+  } catch (err) {
+    console.error(`Could not save the score: ${err.message}`);
+  }
 }
 
 // Mode difficile : redistribue aléatoirement les 4 directions entre les joueurs.
@@ -101,9 +127,10 @@ function scheduleTick() {
   loop = setTimeout(() => {
     const r = game.tick();
     if (r === 'eat') event('eat');
-    if (r === 'dead') {
+    if (game.status === 'gameover') {
       gameoverAt = Date.now();
-      event('dead');
+      recordScore();
+      if (r === 'dead') event('dead');
     }
     pushState();
     if (game.status === 'playing') scheduleTick();
@@ -113,6 +140,7 @@ function scheduleTick() {
 function startGame() {
   if (game.status === 'playing') return;
   if (game.status === 'gameover' && Date.now() - gameoverAt < RESTART_COOLDOWN) return;
+  current = null; // the previous game's name can no longer be changed
   game.start();
   event('start');
   pushState();
@@ -157,6 +185,14 @@ wss.on('connection', (ws) => {
       if ((msg.mode === 'easy' || msg.mode === 'hard') && game.status !== 'playing') {
         mode = msg.mode;
         pushState();
+      }
+      return;
+    }
+
+    if (msg.type === 'rename') {
+      // Any connected display or phone may rename the score of the game that just ended.
+      if (ws.role && game.status === 'gameover' && current) {
+        if (board.rename(current.mode, current.id, msg.name)) pushState();
       }
       return;
     }

@@ -17,6 +17,20 @@
   #label { font-size:7vmin; font-weight:700; }
   #hint { font-size:4vmin; opacity:.8; padding:0 16px; }
   #pad.flash { filter:brightness(1.35); }
+  #pad.over #arrow, #pad.over #label, #pad.over #hint { display:none; }
+  #gameover { width:min(360px, 90vw); display:flex; flex-direction:column; gap:12px; align-items:center; }
+  #gameover[hidden] { display:none; }
+  #gameover h1 { margin:0; font-size:9vmin; }
+  #goScore { font-size:6vmin; font-weight:700; }
+  #goRank { font-size:4.5vmin; opacity:.9; }
+  #nameRow { display:flex; gap:8px; width:100%; }
+  #nameRow[hidden] { display:none; }
+  #nameInput { flex:1; min-width:0; font:inherit; font-size:5vmin; padding:10px; border-radius:8px;
+               border:2px solid rgba(0,0,0,.35); background:#fff; color:#111; text-align:center;
+               -webkit-user-select:text; user-select:text; }
+  #gameover button { font:inherit; font-size:5vmin; padding:10px 20px; border:0; border-radius:8px;
+                     background:#fff; color:#111; cursor:pointer; }
+  #again { width:100%; font-weight:700; }
 </style>
 </head>
 <body>
@@ -24,6 +38,16 @@
   <div id="arrow">…</div>
   <div id="label">Connecting…</div>
   <div id="hint"></div>
+  <div id="gameover" hidden>
+    <h1>Game over</h1>
+    <div id="goScore"></div>
+    <div id="goRank"></div>
+    <div id="nameRow">
+      <input id="nameInput" maxlength="20" autocomplete="off" spellcheck="false" aria-label="Team name">
+      <button id="saveBtn">Save</button>
+    </div>
+    <button id="again">Play again</button>
+  </div>
 </div>
 <script>
 const pad = document.getElementById('pad');
@@ -35,13 +59,43 @@ const INFO = {
   right: ['➡', 'RIGHT'],
 };
 let ws, dir = null;
+let status = 'waiting';
+let editedId = null; // id of the score whose name is shown in the input
+
+function renderGameOver(m) {
+  status = m.status;
+  const over = m.status === 'gameover';
+  pad.classList.toggle('over', over);
+  $('gameover').hidden = !over;
+  if (!over) return;
+  const cur = m.board && m.board.current;
+  $('goScore').textContent = 'Score: ' + m.score;
+  $('nameRow').hidden = !cur;
+  $('goRank').textContent = cur ? 'Rank #' + cur.rank + ' – ' + (m.board.mode === 'hard' ? 'Hard' : 'Easy') : '';
+  const input = $('nameInput');
+  if (cur && (editedId !== cur.id || document.activeElement !== input)) {
+    input.value = cur.name; // do not overwrite while the player is typing
+    editedId = cur.id;
+  }
+}
+function saveName() {
+  if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'rename', name: $('nameInput').value }));
+}
+$('saveBtn').onclick = () => { saveName(); $('nameInput').blur(); };
+$('nameInput').onchange = saveName;
+$('nameInput').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
+$('again').onclick = () => ws.readyState === 1 && ws.send(JSON.stringify({ type: 'press' }));
+// Taps inside the game-over panel must not steer or restart the game.
+$('gameover').addEventListener('pointerdown', (e) => e.stopPropagation());
 
 function connect() {
   ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
   ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', role: 'controller' }));
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.type === 'assigned') {
+    if (m.type === 'state') {
+      renderGameOver(m);
+    } else if (m.type === 'assigned') {
       dir = m.dir;
       document.body.className = dir;
       $('arrow').textContent = INFO[dir][0];
@@ -67,7 +121,7 @@ function connect() {
 
 pad.addEventListener('pointerdown', (e) => {
   e.preventDefault();
-  if (!dir || ws.readyState !== 1) return;
+  if (!dir || ws.readyState !== 1 || status === 'gameover') return; // restart via the button
   ws.send(JSON.stringify({ type: 'press' }));
   if (navigator.vibrate) navigator.vibrate(30);
   pad.classList.add('flash');
