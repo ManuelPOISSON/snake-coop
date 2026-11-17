@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Snake – Controller</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; height:100%; overflow:hidden; touch-action:manipulation; user-select:none; }
+  body { background:#222; color:#fff; font-family:system-ui,sans-serif; transition:background .15s; }
+  body.up    { background:#1e66f5; }
+  body.down  { background:#e5322d; }
+  body.left  { background:#f5c518; color:#222; }
+  body.right { background:#2fb344; }
+  #pad { height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; text-align:center; }
+  #arrow { font-size:34vmin; line-height:1; }
+  #label { font-size:7vmin; font-weight:700; }
+  #hint { font-size:4vmin; opacity:.8; padding:0 16px; }
+  #pad.flash { filter:brightness(1.35); }
+</style>
+</head>
+<body>
+<div id="pad">
+  <div id="arrow">…</div>
+  <div id="label">Connecting…</div>
+  <div id="hint"></div>
+</div>
+<script>
+const pad = document.getElementById('pad');
+const $ = (id) => document.getElementById(id);
+const INFO = {
+  up:    ['⬆', 'UP'],
+  down:  ['⬇', 'DOWN'],
+  left:  ['⬅', 'LEFT'],
+  right: ['➡', 'RIGHT'],
+};
+let ws, dir = null;
+
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host);
+  ws.onopen = () => ws.send(JSON.stringify({ type: 'hello', role: 'controller' }));
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'assigned') {
+      dir = m.dir;
+      document.body.className = dir;
+      $('arrow').textContent = INFO[dir][0];
+      $('label').textContent = INFO[dir][1];
+      $('hint').textContent = 'Tap the screen to steer the snake';
+      // small pop to signal a (re)assignment, even if the direction is unchanged
+      $('arrow').animate([{ transform: 'scale(1.25)' }, { transform: 'scale(1)' }], 200);
+    } else if (m.type === 'spectator') {
+      dir = null;
+      document.body.className = '';
+      $('arrow').textContent = '👀';
+      $('label').textContent = 'Game full';
+      $('hint').textContent = 'All 4 directions are taken. Reload if a spot frees up.';
+    } else if (m.type === 'event' && m.name === 'dead' && navigator.vibrate) {
+      navigator.vibrate([200, 80, 200]);
+    }
+  };
+  ws.onclose = () => {
+    $('label').textContent = 'Reconnecting…';
+    setTimeout(connect, 1000);
+  };
+}
+
+pad.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  if (!dir || ws.readyState !== 1) return;
+  ws.send(JSON.stringify({ type: 'press' }));
+  if (navigator.vibrate) navigator.vibrate(30);
+  pad.classList.add('flash');
+  setTimeout(() => pad.classList.remove('flash'), 100);
+});
+connect();
+</script>
+</body>
+</html>
